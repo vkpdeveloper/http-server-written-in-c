@@ -7,7 +7,15 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define BUFFER_SIZE 1024
+
+void reply_with_path_file(int client_fd, char *request_path);
+char *extract_http_request_path(char *request_buffer);
+
 int main() {
+  setbuf(stderr, NULL);
+  setbuf(stdout, NULL);
+
   int socket_fd, reuse = 1, connection_backlog = 10;
 
   socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -51,12 +59,47 @@ int main() {
 
     printf("Client connected\n");
 
-    // // Example: Sending a welcome message to the client
-    const char *http_response = "HTTP/1.1 200 OK\r\n\r\n";
-    send(client_fd, http_response, strlen(http_response), 0);
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_received;
+    if ((bytes_received = recv(client_fd, &buffer, BUFFER_SIZE, 0)) > 0) {
+      buffer[bytes_received] = '\0';
+    }
 
-    // close(client_fd);
+    if (bytes_received == -1) {
+      printf("Client disconnected\n");
+    } else {
+      char *request_path = extract_http_request_path(buffer);
+      reply_with_path_file(client_fd, request_path);
+      close(client_fd);
+    }
+
+    close(client_fd);
   }
 
   close(socket_fd);
+}
+
+void reply_with_path_file(int client_fd, char *request_path) {
+  if (strcmp(request_path, "/") == 0) {
+    const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
+    send(client_fd, hello_world_message, strlen(hello_world_message), 0);
+  } else {
+    const char *page_not_found_message = "HTTP/1.1 404 Not Found\r\n\r\n";
+    send(client_fd, page_not_found_message, strlen(page_not_found_message), 0);
+  }
+  return;
+}
+
+char *extract_http_request_path(char *buffer) {
+  char *method_path_version = strtok(buffer, "\r\n");
+  char *request_path = strtok(method_path_version, " ");
+
+  while (request_path != NULL) {
+    request_path = strtok(NULL, " ");
+    if (strstr(request_path, "/") != NULL) {
+      break;
+    }
+  }
+
+  return request_path;
 }
