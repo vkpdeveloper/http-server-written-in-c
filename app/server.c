@@ -38,6 +38,8 @@ int main() {
     return 1;
   }
 
+  printf("Waiting for a client to connect...\n");
+
   while (1) {
     struct sockaddr_in client_addr;
     socklen_t addresslen = sizeof(&client_addr);
@@ -49,11 +51,11 @@ int main() {
       return 1;
     }
 
-    printf("New client is connected\n");
+    printf("Client connected\n");
 
-    // Example: Sending a welcome message to the client
-    const char *welcome_message = "Welcome to the server!\n";
-    send(client_fd, welcome_message, strlen(welcome_message), 0);
+    // // Example: Sending a welcome message to the client
+    // const char *welcome_message = "Welcome to the server!\n";
+    // send(client_fd, welcome_message, strlen(welcome_message), 0);
 
     close(client_fd);
   }
