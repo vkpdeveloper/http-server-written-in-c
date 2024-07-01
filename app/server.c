@@ -31,8 +31,6 @@ int main() {
     return 1;
   }
 
-  struct sockaddr client_addr;
-
   if (listen(socket_fd, connection_backlog) == -1) {
     printf("Failed to start listing: %s\n", strerror(errno));
     return 1;
@@ -40,25 +38,25 @@ int main() {
 
   printf("Waiting for a client to connect...\n");
 
-  while (1) {
-    struct sockaddr_in client_addr;
-    socklen_t addresslen = sizeof(&client_addr);
-    int client_fd =
-        accept(socket_fd, (struct sockaddr *)&client_addr, &addresslen);
-    if (client_fd == -1) {
-      close(socket_fd);
-      printf("Accept failed: %s\n", strerror(errno));
-      return 1;
-    }
-
-    printf("Client connected\n");
-
-    // // Example: Sending a welcome message to the client
-    // const char *welcome_message = "Welcome to the server!\n";
-    // send(client_fd, welcome_message, strlen(welcome_message), 0);
-
-    close(client_fd);
+  // while (1) {
+  struct sockaddr_in client_addr;
+  socklen_t addresslen = sizeof(&client_addr);
+  int client_fd =
+      accept(socket_fd, (struct sockaddr *)&client_addr, &addresslen);
+  if (client_fd == -1) {
+    close(socket_fd);
+    printf("Accept failed: %s\n", strerror(errno));
+    return 1;
   }
+
+  printf("Client connected\n");
+
+  // // Example: Sending a welcome message to the client
+  // const char *welcome_message = "Welcome to the server!\n";
+  // send(client_fd, welcome_message, strlen(welcome_message), 0);
+
+  // close(client_fd);
+  // }
 
   close(socket_fd);
 }
