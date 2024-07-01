@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #define BUFFER_SIZE 1024
+#define _POSIX_C_SOURCE 200809L
 
 void reply_with_path_file(int client_fd, char *request_path);
 char *extract_http_request_path(char *request_buffer);
@@ -85,15 +86,14 @@ void reply_with_path_file(int client_fd, char *request_path) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
   } else if (strstr((const char *)request_path, "/echo/") != NULL) {
-    char *copied_request_path = malloc(strlen(request_path));
-    strcpy(copied_request_path, request_path);
-    char *echo_message = extract_the_last_token((char *)copied_request_path);
+    char *echo_message = extract_the_last_token((char *)request_path);
     char *response_message = malloc(71 + 1 + strlen(echo_message));
     sprintf(response_message,
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
             "%d\r\n\r\n%s",
             (int)strlen(echo_message), echo_message);
     send(client_fd, response_message, strlen(response_message), 0);
+    free(response_message);
   } else {
     const char *page_not_found_message = "HTTP/1.1 404 Not Found\r\n\r\n";
     send(client_fd, page_not_found_message, strlen(page_not_found_message), 0);
@@ -102,11 +102,12 @@ void reply_with_path_file(int client_fd, char *request_path) {
 }
 
 char *extract_http_request_path(char *buffer) {
-  char *method_path_version = strtok(buffer, "\r\n");
-  char *request_path = strtok(method_path_version, " ");
+  char *saveptr;
+  char *method_path_version = strtok_r(buffer, "\r\n", &saveptr);
+  char *request_path = strtok_r(method_path_version, " ", &saveptr);
 
   while (request_path != NULL) {
-    request_path = strtok(NULL, " ");
+    request_path = strtok_r(NULL, " ", &saveptr);
     if (strstr(request_path, "/") != NULL) {
       break;
     }
@@ -116,11 +117,11 @@ char *extract_http_request_path(char *buffer) {
 }
 
 char *extract_the_last_token(char *request_path) {
-  char *final_token = strtok(request_path, "/");
+  char *saveptr, *next_token;
+  char *final_token = strtok_r(request_path, "/", &saveptr);
 
-  while (final_token != NULL) {
-    final_token = strtok(NULL, "/");
-    break;
+  while ((next_token = strtok_r(NULL, "/", &saveptr)) != NULL) {
+    final_token = next_token;
   }
   return final_token;
 }
