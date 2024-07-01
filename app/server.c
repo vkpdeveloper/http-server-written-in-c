@@ -86,14 +86,22 @@ void reply_with_path_file(int client_fd, char *request_path) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
   } else if (strstr((const char *)request_path, "/echo/") != NULL) {
-    char *echo_message = extract_the_last_token((char *)request_path);
+    char *copied_request_path = strdup(request_path);
+    char *echo_message = extract_the_last_token((char *)copied_request_path);
     char *response_message = malloc(71 + 1 + strlen(echo_message));
+    if (response_message == NULL) {
+      return;
+    }
     sprintf(response_message,
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
             "%d\r\n\r\n%s",
             (int)strlen(echo_message), echo_message);
     send(client_fd, response_message, strlen(response_message), 0);
+
+    // freeing memory allocations
     free(response_message);
+    free(copied_request_path);
+    free(echo_message);
   } else {
     const char *page_not_found_message = "HTTP/1.1 404 Not Found\r\n\r\n";
     send(client_fd, page_not_found_message, strlen(page_not_found_message), 0);
