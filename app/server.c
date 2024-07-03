@@ -304,11 +304,11 @@ int sizeof_header(header **headers) {
 char *read_file(char *file_path) {
   char *abs_file_path = malloc(strlen(file_path) + 5);
   sprintf(abs_file_path, "%s%s", base_dir_path, file_path);
-  printf("file path is: %s\n", abs_file_path);
   int content_size = 100;
   char *file_content = malloc(content_size);
   FILE *fp;
   fp = fopen(abs_file_path, "r");
+  printf("file path is: %s\n", abs_file_path);
   if (fp == NULL) {
     free(abs_file_path);
     free(file_content);
