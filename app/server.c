@@ -10,8 +10,6 @@
 #define BUFFER_SIZE 1024
 #define _POSIX_C_SOURCE 200809L
 
-const char *BASE_FILE_DIR = "/tmp/";
-
 typedef struct {
   char *key;
   char *value;
@@ -35,9 +33,14 @@ int sizeof_header(header **headers);
 char *read_file(char *file_path);
 void reply_with_404(int client_fd);
 
-int main() {
+char *base_dir_path;
+
+int main(int argc, char *argv[]) {
   setbuf(stderr, NULL);
   setbuf(stdout, NULL);
+
+  base_dir_path = malloc(strlen(argv[2]));
+  strcpy(base_dir_path, argv[2]);
 
   int socket_fd, reuse = 1, connection_backlog = 10;
 
@@ -300,7 +303,7 @@ int sizeof_header(header **headers) {
 
 char *read_file(char *file_path) {
   char *base_file_path = malloc(strlen(file_path) + 5);
-  sprintf(base_file_path, "%s%s", BASE_FILE_DIR, file_path);
+  sprintf(base_file_path, "%s%s", base_dir_path, file_path);
   int content_size = 100;
   char *file_content = malloc(content_size);
   FILE *fp;
