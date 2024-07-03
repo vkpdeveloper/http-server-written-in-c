@@ -30,7 +30,8 @@ void *parse_request(char *request_buffer, http_request *dst);
 void *parse_request_line(char *line, http_request *dst);
 header *parse_header(char *header_line, header *dst);
 int sizeof_header(header **headers);
-char *read_file(char *file_path);
+char *read_file(char *filename);
+int write_file(char *filename, char *content);
 void reply_with_404(int client_fd);
 
 char *base_dir_path;
@@ -157,13 +158,13 @@ void reply(int client_fd, http_request *request) {
             size_of_header_value, f_header->value);
     send(client_fd, response_message, strlen(response_message), 0);
     free(response_message);
-  } else if (strstr(request->path, "/files/") != NULL) {
+  } else if (strstr(request->method, "GET") != NULL &&
+             strstr(request->path, "/files/") != NULL) {
     char *copied_request_path = strdup(request->path);
 
     char *file_path = extract_the_last_token((char *)copied_request_path);
     char *file_content = read_file(file_path);
     if (file_content == NULL) {
-      printf("not working\n");
       reply_with_404(client_fd);
     } else {
       char *response_message = malloc(strlen(file_content) + 120);
@@ -175,6 +176,19 @@ void reply(int client_fd, http_request *request) {
       send(client_fd, response_message, strlen(response_message), 0);
       free(response_message);
     }
+    free(copied_request_path);
+  } else if (strstr(request->method, "POST") != NULL &&
+             strstr(request->path, "/files/") != NULL) {
+    char *copied_request_path = strdup(request->path);
+    char *file_path = extract_the_last_token((char *)copied_request_path);
+
+    if (write_file(file_path, request->body) == 0) {
+      reply_with_404(client_fd);
+    } else {
+      const char *created_response = "HTTP/1.1 201 Created\r\n\r\n";
+      send(client_fd, created_response, strlen(created_response), 0);
+    }
+    free(copied_request_path);
   } else {
     reply_with_404(client_fd);
   }
@@ -273,6 +287,8 @@ void *parse_request(char *request_buffer, http_request *dst) {
   while ((next_token = strtok_r(NULL, "\r\n\r\n", &saved_state)) != NULL) {
     if (saved_state == NULL) {
       // TODO: Parse the request body in this block
+      dst->body = malloc(strlen(next_token));
+      strcpy(dst->body, next_token);
     } else {
       // Parse each header in this block
       header *_header = malloc(sizeof(header));
@@ -291,6 +307,7 @@ void *parse_request(char *request_buffer, http_request *dst) {
   // adding the final null terminated NULL to mark the end of the array
   dst->headers = realloc(dst->headers, (count_of_header + 1) * sizeof(header));
   dst->headers[count_of_header] = NULL;
+
   return dst;
 }
 
@@ -302,8 +319,8 @@ int sizeof_header(header **headers) {
   return size;
 }
 
-char *read_file(char *file_path) {
-  char *abs_file_path = strcat(base_dir_path, file_path);
+char *read_file(char *filename) {
+  char *abs_file_path = strcat(base_dir_path, filename);
   printf("path 1: %s\n", abs_file_path);
   if (access(abs_file_path, F_OK) != 0) {
     return NULL;
@@ -325,4 +342,14 @@ char *read_file(char *file_path) {
 
   fclose(fp);
   return file_content;
+}
+
+int write_file(char *filename, char *content) {
+  FILE *fp = fopen(strcat(base_dir_path, filename), "w");
+  if (fp == NULL) {
+    return 0;
+  }
+  fprintf(fp, "%s", content);
+  fclose(fp);
+  return 1;
 }
