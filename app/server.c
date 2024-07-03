@@ -308,7 +308,7 @@ char *read_file(char *file_path) {
   printf("path: %s\n", abs_file_path);
   FILE *fp = fopen(abs_file_path, "r");
   if (fp == NULL) {
-    perror("failed fp");
+    printf("fp failed: %u %s\n", errno, strerror(errno));
     free(abs_file_path);
     return NULL;
   }
