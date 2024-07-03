@@ -306,6 +306,9 @@ char *read_file(char *file_path) {
   char *abs_file_path = malloc(strlen(file_path) + 5);
   sprintf(abs_file_path, "%s%s", base_dir_path, file_path);
   printf("path 1: %s\n", abs_file_path);
+  if (access(abs_file_path, F_OK) != 0) {
+    return NULL;
+  }
   FILE *fp = fopen(abs_file_path, "r");
   printf("path 2: %s\n", abs_file_path);
   if (fp == NULL) {
