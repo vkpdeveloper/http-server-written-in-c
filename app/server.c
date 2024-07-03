@@ -302,14 +302,15 @@ int sizeof_header(header **headers) {
 }
 
 char *read_file(char *file_path) {
-  char *base_file_path = malloc(strlen(file_path) + 5);
-  sprintf(base_file_path, "%s%s", base_dir_path, file_path);
+  char *abs_file_path = malloc(strlen(file_path) + 5);
+  sprintf(abs_file_path, "%s%s", base_dir_path, file_path);
+  printf("file path is: %s\n", abs_file_path);
   int content_size = 100;
   char *file_content = malloc(content_size);
   FILE *fp;
-  fp = fopen(base_file_path, "r");
+  fp = fopen(abs_file_path, "r");
   if (fp == NULL) {
-    free(base_file_path);
+    free(abs_file_path);
     free(file_content);
     return NULL;
   }
