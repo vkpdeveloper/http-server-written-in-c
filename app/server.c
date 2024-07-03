@@ -326,6 +326,5 @@ char *read_file(char *file_path) {
   printf("%s\n", file_content);
 
   fclose(fp);
-  free(abs_file_path);
   return file_content;
 }
