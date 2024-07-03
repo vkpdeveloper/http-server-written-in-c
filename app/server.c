@@ -313,8 +313,8 @@ char *read_file(char *file_path) {
   FILE *fp = fopen(abs_file_path, "r");
   printf("path 3: %s\n", abs_file_path);
   if (fp == NULL) {
-    printf("fp failed: %u %s\n", errno, strerror(errno));
     free(abs_file_path);
+    printf("fp failed: %u %s\n", errno, strerror(errno));
     return NULL;
   }
   fseek(fp, 0, SEEK_END);
@@ -326,5 +326,6 @@ char *read_file(char *file_path) {
   printf("%s\n", file_content);
 
   fclose(fp);
+  free(abs_file_path);
   return file_content;
 }
