@@ -306,14 +306,12 @@ char *read_file(char *file_path) {
   char *abs_file_path = strcat(base_dir_path, file_path);
   printf("path 1: %s\n", abs_file_path);
   if (access(abs_file_path, F_OK) != 0) {
-    free(abs_file_path);
     return NULL;
   }
   printf("path 2: %s\n", abs_file_path);
   FILE *fp = fopen(abs_file_path, "r");
   printf("path 3: %s\n", abs_file_path);
   if (fp == NULL) {
-    free(abs_file_path);
     printf("fp failed: %u %s\n", errno, strerror(errno));
     return NULL;
   }
