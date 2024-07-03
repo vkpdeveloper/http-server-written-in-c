@@ -10,6 +10,8 @@
 #define BUFFER_SIZE 1024
 #define _POSIX_C_SOURCE 200809L
 
+const char *BASE_FILE_DIR = "/tmp/";
+
 typedef struct {
   char *key;
   char *value;
@@ -23,13 +25,15 @@ typedef struct {
   char *body;
 } http_request;
 
-void reply_with_path_file(int client_fd, http_request *request);
+void reply(int client_fd, http_request *request);
 char *extract_http_request_path(char *request_buffer);
 char *extract_the_last_token(char *request_path);
 void *parse_request(char *request_buffer, http_request *dst);
 void *parse_request_line(char *line, http_request *dst);
 header *parse_header(char *header_line, header *dst);
 int sizeof_header(header **headers);
+char *read_file(char *file_path);
+void reply_with_404(int client_fd);
 
 int main() {
   setbuf(stderr, NULL);
@@ -98,7 +102,7 @@ int main() {
       if (is_parsed == NULL) {
         printf("failed to parse the request\n");
       } else {
-        reply_with_path_file(client_fd, request);
+        reply(client_fd, request);
       }
     }
     close(client_fd);
@@ -107,7 +111,7 @@ int main() {
   close(socket_fd);
 }
 
-void reply_with_path_file(int client_fd, http_request *request) {
+void reply(int client_fd, http_request *request) {
   if (strcmp(request->path, "/") == 0) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
@@ -150,11 +154,32 @@ void reply_with_path_file(int client_fd, http_request *request) {
             size_of_header_value, f_header->value);
     send(client_fd, response_message, strlen(response_message), 0);
     free(response_message);
+  } else if (strstr(request->path, "/files/") != NULL) {
+    char *copied_request_path = strdup(request->path);
+
+    char *file_path = extract_the_last_token((char *)copied_request_path);
+    char *file_content = read_file(file_path);
+    if (file_content == NULL) {
+      reply_with_404(client_fd);
+    } else {
+      char *response_message = malloc(strlen(file_content) + 120);
+      sprintf(response_message,
+              "HTTP/1.1 200 OK\r\nContent-Type: "
+              "application/octet-stream\r\nContent-Length: "
+              "%ld\r\n\r\n%s",
+              strlen(file_content), file_content);
+      send(client_fd, response_message, strlen(response_message), 0);
+      free(response_message);
+    }
   } else {
-    const char *page_not_found_message = "HTTP/1.1 404 Not Found\r\n\r\n";
-    send(client_fd, page_not_found_message, strlen(page_not_found_message), 0);
+    reply_with_404(client_fd);
   }
   return;
+}
+
+void reply_with_404(int client_fd) {
+  const char *page_not_found_message = "HTTP/1.1 404 Not Found\r\n\r\n";
+  send(client_fd, page_not_found_message, strlen(page_not_found_message), 0);
 }
 
 char *extract_http_request_path(char *buffer) {
@@ -271,4 +296,28 @@ int sizeof_header(header **headers) {
     size++;
   }
   return size;
+}
+
+char *read_file(char *file_path) {
+  char *base_file_path = malloc(strlen(file_path) + 5);
+  sprintf(base_file_path, "%s%s", BASE_FILE_DIR, file_path);
+  int content_size = 100;
+  char *file_content = malloc(content_size);
+  FILE *fp;
+  fp = fopen(base_file_path, "r");
+  if (fp == NULL) {
+    free(base_file_path);
+    free(file_content);
+    return NULL;
+  }
+
+  fseek(fp, 0, SEEK_SET);
+
+  while (fread(file_content, sizeof(char), content_size, fp) == 0) {
+    content_size++;
+    file_content = realloc(file_content, content_size);
+  }
+
+  fclose(fp);
+  return file_content;
 }
