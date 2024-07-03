@@ -317,12 +317,11 @@ char *read_file(char *file_path) {
 
   fseek(fp, 0, SEEK_SET);
 
-  printf("%s\n", file_content);
-
   while (fread(file_content, sizeof(char), content_size, fp) == 0) {
     content_size++;
     file_content = realloc(file_content, content_size);
   }
+  printf("%s\n", file_content);
 
   fclose(fp);
   return file_content;
