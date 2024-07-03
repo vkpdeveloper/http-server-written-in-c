@@ -163,6 +163,7 @@ void reply(int client_fd, http_request *request) {
     char *file_path = extract_the_last_token((char *)copied_request_path);
     char *file_content = read_file(file_path);
     if (file_content == NULL) {
+      printf("not working\n");
       reply_with_404(client_fd);
     } else {
       char *response_message = malloc(strlen(file_content) + 120);
