@@ -10,9 +10,26 @@
 #define BUFFER_SIZE 1024
 #define _POSIX_C_SOURCE 200809L
 
-void reply_with_path_file(int client_fd, char *request_path);
+typedef struct {
+  char *key;
+  char *value;
+} header;
+
+typedef struct {
+  char *method;
+  float http_version;
+  char *path;
+  header **headers;
+  char *body;
+} http_request;
+
+void reply_with_path_file(int client_fd, http_request *request);
 char *extract_http_request_path(char *request_buffer);
 char *extract_the_last_token(char *request_path);
+void *parse_request(char *request_buffer, http_request *dst);
+void *parse_request_line(char *line, http_request *dst);
+header *parse_header(char *header_line, header *dst);
+int sizeof_header(header **headers);
 
 int main() {
   setbuf(stderr, NULL);
@@ -70,23 +87,32 @@ int main() {
     if (bytes_received == -1) {
       printf("Client disconnected\n");
     } else {
-      char *request_path = extract_http_request_path(buffer);
-      reply_with_path_file(client_fd, request_path);
-      close(client_fd);
+      http_request *request = malloc(sizeof(http_request));
+      if (request == NULL) {
+        perror("malloc");
+        return 1;
+      }
+      int *is_parsed = parse_request(buffer, request);
+      printf("%s %s %f\n", request->method, request->path,
+             request->http_version);
+      if (is_parsed == NULL) {
+        printf("failed to parse the request\n");
+      } else {
+        reply_with_path_file(client_fd, request);
+      }
     }
-
     close(client_fd);
   }
 
   close(socket_fd);
 }
 
-void reply_with_path_file(int client_fd, char *request_path) {
-  if (strcmp(request_path, "/") == 0) {
+void reply_with_path_file(int client_fd, http_request *request) {
+  if (strcmp(request->path, "/") == 0) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
-  } else if (strstr((const char *)request_path, "/echo/") != NULL) {
-    char *copied_request_path = strdup(request_path);
+  } else if (strstr(request->path, "/echo/") != NULL) {
+    char *copied_request_path = strdup(request->path);
     char *echo_message = extract_the_last_token((char *)copied_request_path);
     char *response_message = malloc(71 + 1 + strlen(echo_message));
     if (response_message == NULL) {
@@ -101,7 +127,29 @@ void reply_with_path_file(int client_fd, char *request_path) {
     // freeing memory allocations
     free(response_message);
     free(copied_request_path);
-    free(echo_message);
+  } else if (strstr(request->path, "/user-agent") != NULL) {
+    header *f_header = NULL;
+    int _current_count = 0;
+    while (f_header == NULL) {
+      header *_header = request->headers[_current_count];
+      if (strstr(_header->key, "User-Agent") != NULL) {
+        f_header = _header;
+        break;
+      }
+      _current_count++;
+    }
+    char *response_message = malloc(1024);
+    if (response_message == NULL) {
+      perror("malloc");
+      return;
+    }
+    int size_of_header_value = strlen(f_header->value);
+    sprintf(response_message,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
+            "%d\r\n\r\n%s",
+            size_of_header_value, f_header->value);
+    send(client_fd, response_message, strlen(response_message), 0);
+    free(response_message);
   } else {
     const char *page_not_found_message = "HTTP/1.1 404 Not Found\r\n\r\n";
     send(client_fd, page_not_found_message, strlen(page_not_found_message), 0);
@@ -132,4 +180,95 @@ char *extract_the_last_token(char *request_path) {
     final_token = next_token;
   }
   return final_token;
+}
+
+void *parse_request_line(char *line, http_request *dst) {
+  char *copied_line = strdup(line);
+  char *next_token, *saved_state;
+  char *line_token = strtok_r(line, " ", &saved_state);
+  if (line_token == NULL) {
+    free(copied_line);
+    return NULL;
+  }
+  // Copying the method of the request line to the http request struct and
+  // making sure that it's null terminated
+  dst->method = malloc(8);
+  if (dst->method == NULL) {
+    perror("malloc");
+    free(copied_line); // Free the strdup'd memory if not needed
+    return NULL;
+  }
+  strcpy(dst->method, line_token);
+  while ((next_token = strtok_r(NULL, " ", &saved_state)) != NULL) {
+    dst->path = malloc(strlen(next_token) + 1);
+    strcpy(dst->path, next_token);
+    dst->http_version = 1.1;
+    break;
+  }
+  return dst;
+}
+
+header *parse_header(char *header_line, header *dst) {
+  char *copied = strdup(header_line);
+
+  char *saved_state;
+  char *buffer_token = strtok_r(copied, ": ", &saved_state);
+
+  dst->key = malloc(strlen(buffer_token) + 1);
+  strcpy(dst->key, buffer_token);
+
+  buffer_token = strtok_r(NULL, ": ", &saved_state);
+  dst->value = malloc(strlen(buffer_token) + 1);
+  strcpy(dst->value, buffer_token);
+
+  free(copied);
+  return dst;
+}
+
+void *parse_request(char *request_buffer, http_request *dst) {
+  char *buffer = strdup(request_buffer);
+  char *saved_state;
+  char *next_token;
+  char *buffer_token = strtok_r(buffer, "\r\n\r\n", &saved_state);
+
+  // parsing the request line and passing the dst of http_request struct
+  int *is_request_line_parsed = parse_request_line(buffer_token, dst);
+  if (is_request_line_parsed == NULL) {
+    return NULL;
+  }
+  dst->headers = malloc(sizeof(header));
+  if (dst->headers == NULL) {
+    return NULL;
+  }
+  int count_of_header = 0;
+  while ((next_token = strtok_r(NULL, "\r\n\r\n", &saved_state)) != NULL) {
+    if (saved_state == NULL) {
+      // TODO: Parse the request body in this block
+    } else {
+      // Parse each header in this block
+      header *_header = malloc(sizeof(header));
+      parse_header(next_token, _header);
+      dst->headers[count_of_header] = _header;
+      count_of_header++;
+      dst->headers =
+          realloc(dst->headers, (count_of_header + 1) * sizeof(header));
+      if (dst->headers == NULL) {
+        return NULL;
+      }
+    }
+    buffer_token = next_token;
+  }
+
+  // adding the final null terminated NULL to mark the end of the array
+  dst->headers = realloc(dst->headers, (count_of_header + 1) * sizeof(header));
+  dst->headers[count_of_header] = NULL;
+  return dst;
+}
+
+int sizeof_header(header **headers) {
+  int size = 0;
+  while (headers[size] != NULL) {
+    size++;
+  }
+  return size;
 }
