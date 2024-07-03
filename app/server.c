@@ -305,23 +305,19 @@ int sizeof_header(header **headers) {
 char *read_file(char *file_path) {
   char *abs_file_path = malloc(strlen(file_path) + 5);
   sprintf(abs_file_path, "%s%s", base_dir_path, file_path);
-  printf("file path is: %s\n", abs_file_path);
-  int content_size = 100;
-  char *file_content = malloc(content_size);
   FILE *fp;
   fp = fopen(abs_file_path, "r");
   if (fp == NULL) {
     free(abs_file_path);
-    free(file_content);
     return NULL;
   }
-
+  printf("file path is: %s\n", abs_file_path);
+  fseek(fp, 0, SEEK_END);
+  int size = ftell(fp);
+  char *file_content = malloc(size);
   fseek(fp, 0, SEEK_SET);
 
-  while (fread(file_content, sizeof(char), content_size, fp) == 0) {
-    content_size++;
-    file_content = realloc(file_content, content_size);
-  }
+  fread(file_content, sizeof(char), size, fp);
   printf("%s\n", file_content);
 
   fclose(fp);
