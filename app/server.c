@@ -305,13 +305,13 @@ int sizeof_header(header **headers) {
 char *read_file(char *file_path) {
   char *abs_file_path = malloc(strlen(file_path) + 5);
   sprintf(abs_file_path, "%s%s", base_dir_path, file_path);
+  printf("path:: %s\n", abs_file_path);
   FILE *fp;
   fp = fopen(abs_file_path, "r");
   if (fp == NULL) {
     free(abs_file_path);
     return NULL;
   }
-  printf("file path is: %s\n", abs_file_path);
   fseek(fp, 0, SEEK_END);
   int size = ftell(fp);
   char *file_content = malloc(size);
