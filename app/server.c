@@ -153,6 +153,16 @@ void reply(int client_fd, http_request *request) {
                 "text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
                 "%d\r\n\r\n%s",
                 (int)strlen(echo_message), echo_message);
+      } else {
+        response_message = malloc(71 + 1 + strlen(echo_message));
+        if (response_message == NULL) {
+          return;
+        }
+        sprintf(
+            response_message,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
+            "%d\r\n\r\n%s",
+            (int)strlen(echo_message), echo_message);
       }
     }
     send(client_fd, response_message, strlen(response_message), 0);
