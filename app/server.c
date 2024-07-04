@@ -28,11 +28,12 @@ char *extract_http_request_path(char *request_buffer);
 char *extract_the_last_token(char *request_path);
 void *parse_request(char *request_buffer, http_request *dst);
 void *parse_request_line(char *line, http_request *dst);
-header *parse_header(char *header_line, header *dst);
+header *parse_headers(char *header_line, header *dst);
 int sizeof_header(header **headers);
 char *read_file(char *filename);
 int write_file(char *filename, char *content);
 void reply_with_404(int client_fd);
+char *parse_client_content_encoding_headers(header **headers);
 
 char *base_dir_path;
 
@@ -40,8 +41,15 @@ int main(int argc, char *argv[]) {
   setbuf(stderr, NULL);
   setbuf(stdout, NULL);
 
-  base_dir_path = malloc(strlen(argv[2]));
-  strcpy(base_dir_path, argv[2]);
+  if (argc >= 2) {
+    base_dir_path = malloc(strlen(argv[2]));
+    strcpy(base_dir_path, argv[2]);
+  } else {
+    base_dir_path = malloc(7);
+    strcpy(base_dir_path, "/tmp/");
+  }
+
+  printf("Setting --directory path to: %s\n", base_dir_path);
 
   int socket_fd, reuse = 1, connection_backlog = 10;
 
@@ -101,11 +109,11 @@ int main(int argc, char *argv[]) {
         return 1;
       }
       int *is_parsed = parse_request(buffer, request);
-      printf("%s %s %f\n", request->method, request->path,
-             request->http_version);
       if (is_parsed == NULL) {
         printf("failed to parse the request\n");
       } else {
+        printf("%s %s %f\n", request->method, request->path,
+               request->http_version);
         reply(client_fd, request);
       }
     }
@@ -122,14 +130,31 @@ void reply(int client_fd, http_request *request) {
   } else if (strstr(request->path, "/echo/") != NULL) {
     char *copied_request_path = strdup(request->path);
     char *echo_message = extract_the_last_token((char *)copied_request_path);
-    char *response_message = malloc(71 + 1 + strlen(echo_message));
-    if (response_message == NULL) {
-      return;
+    char *content_encoding_algorithms =
+        parse_client_content_encoding_headers(request->headers);
+    char *response_message;
+    if (content_encoding_algorithms == NULL) {
+      response_message = malloc(71 + 1 + strlen(echo_message));
+      if (response_message == NULL) {
+        return;
+      }
+      sprintf(response_message,
+              "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
+              "%d\r\n\r\n%s",
+              (int)strlen(echo_message), echo_message);
+    } else {
+      if ((strstr(content_encoding_algorithms, "gzip") != NULL)) {
+        response_message = malloc(100 + 1 + strlen(echo_message));
+        if (response_message == NULL) {
+          return;
+        }
+        sprintf(response_message,
+                "HTTP/1.1 200 OK\r\nContent-Type: "
+                "text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
+                "%d\r\n\r\n%s",
+                (int)strlen(echo_message), echo_message);
+      }
     }
-    sprintf(response_message,
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
-            "%d\r\n\r\n%s",
-            (int)strlen(echo_message), echo_message);
     send(client_fd, response_message, strlen(response_message), 0);
 
     // freeing memory allocations
@@ -251,7 +276,7 @@ void *parse_request_line(char *line, http_request *dst) {
   return dst;
 }
 
-header *parse_header(char *header_line, header *dst) {
+header *parse_headers(char *header_line, header *dst) {
   char *copied = strdup(header_line);
 
   char *saved_state;
@@ -260,11 +285,23 @@ header *parse_header(char *header_line, header *dst) {
   dst->key = malloc(strlen(buffer_token) + 1);
   strcpy(dst->key, buffer_token);
 
+  char *header_value;
   buffer_token = strtok_r(NULL, ": ", &saved_state);
-  dst->value = malloc(strlen(buffer_token) + 1);
-  strcpy(dst->value, buffer_token);
+  header_value = malloc(strlen(buffer_token));
+  strcpy(header_value, buffer_token);
+
+  while (saved_state != NULL) {
+    buffer_token = strtok_r(NULL, ": ", &saved_state);
+    header_value =
+        realloc(header_value, strlen(header_value) + strlen(buffer_token));
+    strcat(header_value, buffer_token);
+  }
+
+  dst->value = malloc(strlen(header_value) + 1);
+  strcpy(dst->value, header_value);
 
   free(copied);
+  free(header_value);
   return dst;
 }
 
@@ -292,7 +329,7 @@ void *parse_request(char *request_buffer, http_request *dst) {
     } else {
       // Parse each header in this block
       header *_header = malloc(sizeof(header));
-      parse_header(next_token, _header);
+      parse_headers(next_token, _header);
       dst->headers[count_of_header] = _header;
       count_of_header++;
       dst->headers =
@@ -352,4 +389,18 @@ int write_file(char *filename, char *content) {
   fprintf(fp, "%s", content);
   fclose(fp);
   return 1;
+}
+
+char *parse_client_content_encoding_headers(header **headers) {
+  int headers_size = sizeof_header(headers);
+  char *algorithms = NULL;
+  char *encoding_algorithms;
+  for (int i = 0; i < headers_size; i++) {
+    header *_header = headers[i];
+    if (strstr(_header->key, "Accept-Encoding") != NULL) {
+      algorithms = malloc(strlen(_header->value));
+      strcpy(algorithms, _header->value);
+    }
+  }
+  return algorithms;
 }
