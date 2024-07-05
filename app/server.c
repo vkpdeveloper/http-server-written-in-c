@@ -34,6 +34,7 @@ char *read_file(char *filename);
 int write_file(char *filename, char *content);
 void reply_with_404(int client_fd);
 char *parse_client_content_encoding_headers(header **headers);
+char *get_header(header **headers, const char *header_name);
 
 char *base_dir_path;
 
@@ -131,7 +132,7 @@ void reply(int client_fd, http_request *request) {
     char *copied_request_path = strdup(request->path);
     char *echo_message = extract_the_last_token((char *)copied_request_path);
     char *content_encoding_algorithms =
-        parse_client_content_encoding_headers(request->headers);
+        get_header(request->headers, "Accept-Encoding");
     char *response_message;
     if (content_encoding_algorithms == NULL) {
       response_message = malloc(71 + 1 + strlen(echo_message));
@@ -413,4 +414,18 @@ char *parse_client_content_encoding_headers(header **headers) {
     }
   }
   return algorithms;
+}
+
+char *get_header(header **headers, const char *header_name) {
+  int headers_size = sizeof_header(headers);
+  char *value;
+  for (int i = 0; i < headers_size; i++) {
+    header *_header = headers[i];
+    if (strstr(_header->key, header_name) != NULL) {
+      value = malloc(strlen(_header->value));
+      strcpy(value, _header->value);
+      break;
+    }
+  }
+  return value;
 }
