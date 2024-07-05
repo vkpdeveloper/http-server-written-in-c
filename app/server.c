@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
 }
 
 void reply(int client_fd, http_request *request) {
-    char *response_message = NULL;
+  char *response_message = NULL;
   if (strcmp(request->path, "/") == 0) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
@@ -171,10 +171,10 @@ void reply(int client_fd, http_request *request) {
     free(copied_request_path);
   } else if (strstr(request->path, "/user-agent") != NULL) {
     char *user_agent = get_header(request->headers, "User-Agent");
-    if(user_agent == NULL) {
-        return;
+    if (user_agent == NULL) {
+      return;
     }
-response_message = malloc(1024);
+    response_message = malloc(1024);
     if (response_message == NULL) {
       perror("malloc");
       return;
@@ -227,8 +227,8 @@ response_message = malloc(1024);
   } else {
     reply_with_404(client_fd);
   }
-  if(response_message != NULL) {
-     free(response_message);
+  if (response_message != NULL) {
+    free(response_message);
   }
   return;
 }
@@ -372,7 +372,7 @@ int sizeof_header(header **headers) {
 }
 
 char *read_file(char *filename) {
-    char *copied_base_dir = strdup(base_dir_path);
+  char *copied_base_dir = strdup(base_dir_path);
   char *abs_file_path = strcat(copied_base_dir, filename);
   if (access(abs_file_path, F_OK) != 0) {
     return NULL;
