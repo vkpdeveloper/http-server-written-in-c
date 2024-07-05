@@ -131,8 +131,7 @@ void reply(int client_fd, http_request *request) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
   } else if (strstr(request->path, "/echo/") != NULL) {
-    char *copied_request_path = strdup(request->path);
-    char *echo_message = extract_the_last_token((char *)copied_request_path);
+    char *echo_message = extract_the_last_token(request->path);
     char *content_encoding_algorithms =
         get_header(request->headers, "Accept-Encoding");
     if (content_encoding_algorithms == NULL) {
@@ -168,7 +167,6 @@ void reply(int client_fd, http_request *request) {
       }
     }
     send(client_fd, response_message, strlen(response_message), 0);
-    free(copied_request_path);
   } else if (strstr(request->path, "/user-agent") != NULL) {
     char *user_agent = get_header(request->headers, "User-Agent");
     if (user_agent == NULL) {
@@ -188,9 +186,7 @@ void reply(int client_fd, http_request *request) {
     free(user_agent);
   } else if (strstr(request->method, "GET") != NULL &&
              strstr(request->path, "/files/") != NULL) {
-    char *copied_request_path = strdup(request->path);
-
-    char *file_path = extract_the_last_token((char *)copied_request_path);
+    char *file_path = extract_the_last_token(request->path);
     char *file_content = read_file(file_path);
     if (file_content == NULL) {
       reply_with_404(client_fd);
@@ -211,11 +207,9 @@ void reply(int client_fd, http_request *request) {
     }
     free(file_content);
     // free(file_path);
-    free(copied_request_path);
   } else if (strstr(request->method, "POST") != NULL &&
              strstr(request->path, "/files/") != NULL) {
-    char *copied_request_path = strdup(request->path);
-    char *file_path = extract_the_last_token((char *)copied_request_path);
+    char *file_path = extract_the_last_token(request->path);
 
     if (write_file(file_path, request->body) == 0) {
       reply_with_404(client_fd);
@@ -223,7 +217,6 @@ void reply(int client_fd, http_request *request) {
       const char *created_response = "HTTP/1.1 201 Created\r\n\r\n";
       send(client_fd, created_response, strlen(created_response), 0);
     }
-    free(copied_request_path);
   } else {
     reply_with_404(client_fd);
   }
@@ -254,8 +247,9 @@ char *extract_http_request_path(char *buffer) {
 }
 
 char *extract_the_last_token(char *request_path) {
+  char *copied_request_path = strdup(request_path);
   char *saveptr, *next_token;
-  char *final_token = strtok_r(request_path, "/", &saveptr);
+  char *final_token = strtok_r(copied_request_path, "/", &saveptr);
 
   while ((next_token = strtok_r(NULL, "/", &saveptr)) != NULL) {
     final_token = next_token;
