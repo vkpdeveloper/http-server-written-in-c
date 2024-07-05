@@ -94,6 +94,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Client connected\n");
+    http_request *request;
 
     char buffer[BUFFER_SIZE];
     ssize_t bytes_received;
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
     if (bytes_received == -1) {
       printf("Client disconnected\n");
     } else {
-      http_request *request = malloc(sizeof(http_request));
+      request = malloc(sizeof(http_request));
       if (request == NULL) {
         perror("malloc");
         return 1;
@@ -116,15 +117,16 @@ int main(int argc, char *argv[]) {
         printf("%s %s %f\n", request->method, request->path,
                request->http_version);
         reply(client_fd, request);
+        free(request);
       }
     }
     close(client_fd);
   }
-
   close(socket_fd);
 }
 
 void reply(int client_fd, http_request *request) {
+    char *response_message = NULL;
   if (strcmp(request->path, "/") == 0) {
     const char *hello_world_message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd, hello_world_message, strlen(hello_world_message), 0);
@@ -133,7 +135,6 @@ void reply(int client_fd, http_request *request) {
     char *echo_message = extract_the_last_token((char *)copied_request_path);
     char *content_encoding_algorithms =
         get_header(request->headers, "Accept-Encoding");
-    char *response_message;
     if (content_encoding_algorithms == NULL) {
       response_message = malloc(71 + 1 + strlen(echo_message));
       if (response_message == NULL) {
@@ -167,33 +168,24 @@ void reply(int client_fd, http_request *request) {
       }
     }
     send(client_fd, response_message, strlen(response_message), 0);
-
-    // freeing memory allocations
-    free(response_message);
     free(copied_request_path);
   } else if (strstr(request->path, "/user-agent") != NULL) {
-    header *f_header = NULL;
-    int _current_count = 0;
-    while (f_header == NULL) {
-      header *_header = request->headers[_current_count];
-      if (strstr(_header->key, "User-Agent") != NULL) {
-        f_header = _header;
-        break;
-      }
-      _current_count++;
+    char *user_agent = get_header(request->headers, "User-Agent");
+    if(user_agent == NULL) {
+        return;
     }
-    char *response_message = malloc(1024);
+response_message = malloc(1024);
     if (response_message == NULL) {
       perror("malloc");
       return;
     }
-    int size_of_header_value = strlen(f_header->value);
+    int size_of_header_value = strlen(user_agent);
     sprintf(response_message,
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
             "%d\r\n\r\n%s",
-            size_of_header_value, f_header->value);
+            size_of_header_value, user_agent);
     send(client_fd, response_message, strlen(response_message), 0);
-    free(response_message);
+    free(user_agent);
   } else if (strstr(request->method, "GET") != NULL &&
              strstr(request->path, "/files/") != NULL) {
     char *copied_request_path = strdup(request->path);
@@ -203,15 +195,22 @@ void reply(int client_fd, http_request *request) {
     if (file_content == NULL) {
       reply_with_404(client_fd);
     } else {
-      char *response_message = malloc(strlen(file_content) + 120);
+      response_message = malloc(strlen(file_content) + 120);
+      if (response_message == NULL) {
+        perror("malloc");
+        free(file_content);
+        free(file_path);
+        return;
+      }
       sprintf(response_message,
               "HTTP/1.1 200 OK\r\nContent-Type: "
               "application/octet-stream\r\nContent-Length: "
               "%ld\r\n\r\n%s",
               strlen(file_content), file_content);
       send(client_fd, response_message, strlen(response_message), 0);
-      free(response_message);
     }
+    free(file_content);
+    // free(file_path);
     free(copied_request_path);
   } else if (strstr(request->method, "POST") != NULL &&
              strstr(request->path, "/files/") != NULL) {
@@ -227,6 +226,9 @@ void reply(int client_fd, http_request *request) {
     free(copied_request_path);
   } else {
     reply_with_404(client_fd);
+  }
+  if(response_message != NULL) {
+     free(response_message);
   }
   return;
 }
@@ -258,6 +260,8 @@ char *extract_the_last_token(char *request_path) {
   while ((next_token = strtok_r(NULL, "/", &saveptr)) != NULL) {
     final_token = next_token;
   }
+  free(next_token);
+  free(saveptr);
   return final_token;
 }
 
@@ -368,14 +372,12 @@ int sizeof_header(header **headers) {
 }
 
 char *read_file(char *filename) {
-  char *abs_file_path = strcat(base_dir_path, filename);
-  printf("path 1: %s\n", abs_file_path);
+    char *copied_base_dir = strdup(base_dir_path);
+  char *abs_file_path = strcat(copied_base_dir, filename);
   if (access(abs_file_path, F_OK) != 0) {
     return NULL;
   }
-  printf("path 2: %s\n", abs_file_path);
   FILE *fp = fopen(abs_file_path, "r");
-  printf("path 3: %s\n", abs_file_path);
   if (fp == NULL) {
     printf("fp failed: %u %s\n", errno, strerror(errno));
     return NULL;
@@ -386,9 +388,9 @@ char *read_file(char *filename) {
   fseek(fp, 0, SEEK_SET);
 
   fread(file_content, sizeof(char), size, fp);
-  printf("%s\n", file_content);
 
   fclose(fp);
+  free(copied_base_dir);
   return file_content;
 }
 
@@ -403,17 +405,18 @@ int write_file(char *filename, char *content) {
 }
 
 char *parse_client_content_encoding_headers(header **headers) {
-  int headers_size = sizeof_header(headers);
-  char *algorithms = NULL;
-  char *encoding_algorithms;
-  for (int i = 0; i < headers_size; i++) {
-    header *_header = headers[i];
-    if (strstr(_header->key, "Accept-Encoding") != NULL) {
-      algorithms = malloc(strlen(_header->value));
-      strcpy(algorithms, _header->value);
-    }
-  }
-  return algorithms;
+  // int headers_size = sizeof_header(headers);
+  // char *algorithms = NULL;
+  // char *encoding_algorithms;
+  // for (int i = 0; i < headers_size; i++) {
+  //   header *_header = headers[i];
+  //   if (strstr(_header->key, "Accept-Encoding") != NULL) {
+  //     algorithms = malloc(strlen(_header->value));
+  //     strcpy(algorithms, _header->value);
+  //   }
+  // }
+  // return algorithms;
+  return "";
 }
 
 char *get_header(header **headers, const char *header_name) {
