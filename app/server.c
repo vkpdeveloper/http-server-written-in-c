@@ -10,16 +10,16 @@
 #define BUFFER_SIZE 1024
 #define _POSIX_C_SOURCE 200809L
 
-typedef struct {
+struct header {
   char *key;
   char *value;
-} header;
+};
 
 typedef struct {
   char *method;
   float http_version;
   char *path;
-  header **headers;
+  struct header **headers;
   char *body;
 } http_request;
 
@@ -28,13 +28,13 @@ char *extract_http_request_path(char *request_buffer);
 char *extract_the_last_token(char *request_path);
 void *parse_request(char *request_buffer, http_request *dst);
 void *parse_request_line(char *line, http_request *dst);
-header *parse_headers(char *header_line, header *dst);
-int sizeof_header(header **headers);
+struct header *parse_headers(char *header_line, struct header *dst);
+int sizeof_header(struct header **headers);
 char *read_file(char *filename);
 int write_file(char *filename, char *content);
 void reply_with_404(int client_fd);
-char *parse_client_content_encoding_headers(header **headers);
-char *get_header(header **headers, const char *header_name);
+char *parse_client_content_encoding_headers(struct header **headers);
+char *get_header(struct header **headers, const char *header_name);
 
 char *base_dir_path;
 
@@ -285,7 +285,7 @@ void *parse_request_line(char *line, http_request *dst) {
   return dst;
 }
 
-header *parse_headers(char *header_line, header *dst) {
+struct header *parse_headers(char *header_line, struct header *dst) {
   char *copied = strdup(header_line);
 
   char *saved_state;
@@ -325,7 +325,7 @@ void *parse_request(char *request_buffer, http_request *dst) {
   if (is_request_line_parsed == NULL) {
     return NULL;
   }
-  dst->headers = malloc(sizeof(header));
+  dst->headers = malloc(sizeof(struct header));
   if (dst->headers == NULL) {
     return NULL;
   }
@@ -337,12 +337,12 @@ void *parse_request(char *request_buffer, http_request *dst) {
       strcpy(dst->body, next_token);
     } else {
       // Parse each header in this block
-      header *_header = malloc(sizeof(header));
+      struct header *_header = malloc(sizeof(struct header));
       parse_headers(next_token, _header);
       dst->headers[count_of_header] = _header;
       count_of_header++;
       dst->headers =
-          realloc(dst->headers, (count_of_header + 1) * sizeof(header));
+          realloc(dst->headers, (count_of_header + 1) * sizeof(struct header));
       if (dst->headers == NULL) {
         return NULL;
       }
@@ -351,13 +351,14 @@ void *parse_request(char *request_buffer, http_request *dst) {
   }
 
   // adding the final null terminated NULL to mark the end of the array
-  dst->headers = realloc(dst->headers, (count_of_header + 1) * sizeof(header));
+  dst->headers =
+      realloc(dst->headers, (count_of_header + 1) * sizeof(struct header));
   dst->headers[count_of_header] = NULL;
 
   return dst;
 }
 
-int sizeof_header(header **headers) {
+int sizeof_header(struct header **headers) {
   int size = 0;
   while (headers[size] != NULL) {
     size++;
@@ -398,7 +399,7 @@ int write_file(char *filename, char *content) {
   return 1;
 }
 
-char *parse_client_content_encoding_headers(header **headers) {
+char *parse_client_content_encoding_headers(struct header **headers) {
   // int headers_size = sizeof_header(headers);
   // char *algorithms = NULL;
   // char *encoding_algorithms;
@@ -413,11 +414,11 @@ char *parse_client_content_encoding_headers(header **headers) {
   return "";
 }
 
-char *get_header(header **headers, const char *header_name) {
+char *get_header(struct header **headers, const char *header_name) {
   int headers_size = sizeof_header(headers);
   char *value;
   for (int i = 0; i < headers_size; i++) {
-    header *_header = headers[i];
+    struct header *_header = headers[i];
     if (strstr(_header->key, header_name) != NULL) {
       value = malloc(strlen(_header->value));
       strcpy(value, _header->value);
